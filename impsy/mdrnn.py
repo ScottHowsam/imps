@@ -6,7 +6,10 @@ University of Oslo, Norway.
 
 import numpy as np
 import tensorflow as tf
-import keras_mdn_layer as mdn
+try:
+    import keras_mdn_layer as mdn
+except ImportError:
+    import mdn # Version 0.3.0 for windows compatibility
 import time
 import datetime
 

@@ -1,0 +1,65 @@
+# The configuration file for IMPSY: Interactive Musical Prediction System
+
+# Metadata about this configuration
+title = "Casio CDP-S150 Configuration"
+owner = "Scott Howsam"
+description = "Uses USB connection to a Casio CDP-S150 keyboard"
+
+# Basic config
+log = true
+log_predictions = false
+verbose = true
+
+# Interaction Configuration
+[interaction]
+mode = "callresponse" # Can be: "callresponse", "polyphony", "battle", "useronly"
+threshold = 0.1 # number of seconds before switching in call-response mode
+input_thru = false # sends inputs directly to outputs (e.g., if input interface is different than output synth)
+
+# Model configuration
+[model]
+dimension = 9
+file = "models/musicMDRNN-dim9-layers2-units64-mixtures5-scale10.h5"
+size = "s" # Can be one of: xs, s, m, l, xl
+sigmatemp = 0.01
+pitemp = 1
+timescale = 1
+
+# MIDI Mapping
+# MIDI Mapping
+[midi]
+in_device = "CASIO USB-MIDI 0"
+out_device = "CASIO USB-MIDI 1"
+input = [
+  ["note_on", 1, 60],  # Note On, Channel 0, Middle C
+  ["note_off", 1, 60],  # Note Off, Channel 0, Middle C
+  ["note_on", 1, 62],  # Note On, Channel 0, D
+  ["note_off", 1, 62],  # Note Off, Channel 0, D
+  ["note_on", 1, 64],  # Note On, Channel 0, E
+  ["note_off", 1, 64],  # Note Off, Channel 0, E
+  ["note_on", 1, 65],  # Note On, Channel 0, F
+  ["note_off", 1, 65],  # Note Off, Channel 0, F
+  ["control_change", 1, 64], # Sustain pedal
+]
+output = [
+  ["note_on", 1, 60],  # Note On, Channel 0, Middle C
+  ["note_off", 1, 60],  # Note Off, Channel 0, Middle C
+  ["note_on", 1, 62],  # Note On, Channel 0, D
+  ["note_off", 1, 62],  # Note Off, Channel 0, D
+  ["note_on", 1, 64],  # Note On, Channel 0, E
+  ["note_off", 1, 64],  # Note Off, Channel 0, E
+  ["note_on", 1, 65],  # Note On, Channel 0, F
+  ["note_off", 1, 65],  # Note Off, Channel 0, F
+  ["control_change", 1, 64], # Sustain pedal
+]
+
+
+[websocket]
+server_ip = "0.0.0.0" # The address of this server
+server_port = 5001 # The port this server should listen on.
+
+[osc]
+server_ip = "localhost" # Address of IMPSY
+server_port = "5000" # Port IMPSY listens on
+client_ip = "localhost" # Address of the output device
+client_port = "5002" # Port of the output device

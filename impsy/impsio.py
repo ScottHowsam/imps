@@ -526,6 +526,7 @@ class MIDIServer(IOServer):
             click.secho(f"out: {values}", fg="green")
         for i in range(self.dimension - 1):
             if outconf[i][0] == "note_on":
+                print("OUTCONF", outconf[i])
                 self.send_midi_note_on(
                     outconf[i][1] - 1, values[i], 127
                 )  # note decremented channel (0-15)

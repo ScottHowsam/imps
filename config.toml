@@ -1,9 +1,9 @@
 # The configuration file for IMPSY: Interactive Musical Prediction System
 
 # Metadata about this configuration
-title = "Roland S-1 to S-1"
-owner = "Charles Martin"
-description = "A self-contained config for the Roland S-1"
+title = "Casio CDP-S150 Configuration"
+owner = "Scott Howsam"
+description = "Uses USB connection to a Casio CDP-S150 keyboard"
 
 # Basic config
 log = true
@@ -28,31 +28,29 @@ timescale = 1
 # MIDI Mapping
 # MIDI Mapping
 [midi]
-in_device = "S-1"
-out_device = "S-1"
+in_device = "CASIO USB-MIDI 0"
+out_device = "CASIO USB-MIDI 1"
 input = [
-  # ["note_on", 3], # notes input
-  ["control_change", 3, 3], # lfo rate
-  ["control_change", 3, 13], # osc lfo
-  ["control_change", 3, 19], # osc square level
-  # ["control_change", 3, 20], # osc tri level
-  ["control_change", 3, 21], # osc sub level
-  ["control_change", 3, 23], # osc noise level
-  ["control_change", 3, 24], # filter env knob
-  ["control_change", 3, 25], # filter lvo knob
-  ["control_change", 3, 71], # filter reso knob
+  ["note_on", 1, 60],  # Note On, Channel 0, Middle C
+  ["note_off", 1, 60],  # Note Off, Channel 0, Middle C
+  ["note_on", 1, 62],  # Note On, Channel 0, D
+  ["note_off", 1, 62],  # Note Off, Channel 0, D
+  ["note_on", 1, 64],  # Note On, Channel 0, E
+  ["note_off", 1, 64],  # Note Off, Channel 0, E
+  ["note_on", 1, 65],  # Note On, Channel 0, F
+  ["note_off", 1, 65],  # Note Off, Channel 0, F
+  ["control_change", 1, 64], # Sustain pedal
 ]
 output = [
-  ["note_on", 3], # notes input
-  ["control_change", 3, 3], # lfo rate
-  ["control_change", 3, 13], # osc lfo
-  ["control_change", 3, 19], # osc square level
-  # ["control_change", 3, 20], # osc tri level
-  ["control_change", 3, 21], # osc sub level
-  ["control_change", 3, 23], # osc noise level
-  ["control_change", 3, 24], # filter env knob
-  ["control_change", 3, 25], # filter lvo knob
-  ["control_change", 3, 71], # filter reso knob
+  ["note_on", 1, 60],  # Note On, Channel 0, Middle C
+  ["note_off", 1, 60],  # Note Off, Channel 0, Middle C
+  ["note_on", 1, 62],  # Note On, Channel 0, D
+  ["note_off", 1, 62],  # Note Off, Channel 0, D
+  ["note_on", 1, 64],  # Note On, Channel 0, E
+  ["note_off", 1, 64],  # Note Off, Channel 0, E
+  ["note_on", 1, 65],  # Note On, Channel 0, F
+  ["note_off", 1, 65],  # Note Off, Channel 0, F
+  ["control_change", 1, 64], # Sustain pedal
 ]
 
 
