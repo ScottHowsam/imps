@@ -163,13 +163,15 @@ class InteractionServer(object):
         # set up dense interaction list
         int_input = self.last_user_interaction_data[1:]
         int_input[index] = value
+        new_input = int_input[:1] #TODO REMOVE
+        print("VALUES:", new_input) #TODO REMOVE
         # log
         values = list(map(int, (np.ceil(int_input * 127))))
         if self.verbose:
             click.secho(f"in: {values}", fg="yellow")
         logging.info(
             "{1},interface,{0}".format(
-                ",".join(map(str, int_input)), datetime.datetime.now().isoformat()
+                ",".join(map(str, new_input)), datetime.datetime.now().isoformat() #TODO change back to int_input
             )
         )
         # put it in the queue

@@ -226,7 +226,7 @@ class PredictiveMusicMDRNN(object):
         """Train the network for a number of epochs with a specific dataset."""
         # Setup callbacks
         date_string = datetime.datetime.today().strftime("%Y%m%d-%H_%M_%S")
-        checkpoint_path = save_location + "/" + self.model_name() + "-ckpt.keras"
+        checkpoint_path = save_location + "/" + self.model_name() + "-ckpt.h5" # TODO: change from .h5 to .keras
         # checkpoint_path = save_location + "/" + model_name + "-E{epoch:02d}-VL{val_loss:.2f}.keras"
         checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             checkpoint_path,
