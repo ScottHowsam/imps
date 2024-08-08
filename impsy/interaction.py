@@ -10,6 +10,8 @@ from threading import Thread
 import click
 from .utils import mdrnn_config
 import impsy.impsio as impsio
+from impsy.structure import PredictionTree
+import impsy.heuristics as heuristics
 
 np.set_printoptions(precision=2)
 
@@ -129,6 +131,13 @@ class InteractionServer(object):
         )
         self.call_response_mode = "call"
 
+        # Set up structural variables
+        self.rnn_output_memory_size = 15
+        self.rnn_output_memory = []
+        self.rnn_prediction_tree = PredictionTree(max_depth=2, branching_factor=4) #TODO Variable depth and branching factor.
+
+
+
     def send_back_values(self, output_values):
         """sends back sound commands to the MIDI/OSC/WebSockets outputs"""
         output = np.minimum(np.maximum(output_values, 0), 1)
@@ -197,8 +206,11 @@ class InteractionServer(object):
         """Part of the interaction loop: reads input, makes predictions, outputs results"""
         # First deal with user --> MDRNN prediction
         if self.user_to_rnn and not self.interface_input_queue.empty():
+            print("User to RNN")
             item = self.interface_input_queue.get(block=True, timeout=None)
+            print("Item:", item)
             rnn_output = neural_net.generate_touch(item)
+            print("RNN Output:", rnn_output)
             if self.rnn_to_sound:
                 self.rnn_output_buffer.put_nowait(rnn_output)
             self.interface_input_queue.task_done()
@@ -209,8 +221,37 @@ class InteractionServer(object):
             and self.rnn_output_buffer.empty()
             and not self.rnn_prediction_queue.empty()
         ):
+            print("RNN to RNN")
             item = self.rnn_prediction_queue.get(block=True, timeout=None)
-            rnn_output = neural_net.generate_touch(item)
+            print("Item:", item)
+            # If memory is length zero, set memory to the current item.
+            if not self.rnn_output_memory:
+                self.rnn_output_memory = [item]
+            # start timer
+            start_time = time.time()
+            self.rnn_prediction_tree.build_tree(self.rnn_output_memory, neural_net.generate_touch)
+            # Print the sampled branches
+            sampled_branches = self.rnn_prediction_tree.rank_branches(heuristics.four_note_repetition)
+            for i, (branch, heuristic_value) in enumerate(sampled_branches):
+                print(f"Branch {i + 1} Heuristic Value: {heuristic_value:.4f}):")
+                print(branch)
+                print(f"Branch length: {len(branch)}")
+                print()
+            # Get the branch with the highest heuristic value
+            best_branch = self.rnn_prediction_tree.best_branch
+            print("Best Branch:", best_branch)
+            # Get the item from memory length + 1 from the best branch
+            rnn_output = best_branch[0][len(self.rnn_output_memory)]
+            # End timer
+            end_time = time.time()
+            print(f"Time taken: {end_time - start_time}")
+
+            #rnn_output = neural_net.generate_touch(item)
+            print("RNN Output:", rnn_output)
+            self.rnn_output_memory.append(rnn_output)
+            if len(self.rnn_output_memory) > self.rnn_output_memory_size:
+                self.rnn_output_memory.pop(0)
+            print("Memory:", self.rnn_output_memory)
             self.rnn_output_buffer.put_nowait(
                 rnn_output
             )  # put it in the playback queue.

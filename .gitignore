@@ -170,3 +170,5 @@ datasets
 *.no
 *.npz
 *.csv
+
+python_311_env
