@@ -52,6 +52,60 @@ class IOServer(abc.ABC):
         pass
 
 
+class SerialServer(IOServer):
+    """Handles standard serial communication for IMPSY. 
+    Messages are encoded in CSV format with new lines at the end of each message."""
+
+
+    def __init__(self, config: dict, callback: Callable[[int, float], None], dense_callback: Callable[[List[int]], None]) -> None:
+        super().__init__(config, callback, dense_callback)
+        self.serial_port = config["serial"]["port"]
+        self.baudrate = config["serial"]["baudrate"] # 31250 midi, 
+        self.serial = None
+        self.buffer = ""
+
+    
+    def send(self, output_values) -> None:
+        """Send values as a CSV line."""
+        output_message = ','.join(map(str, output_values)) + '\n'
+        self.serial.write(output_message.encode())
+    
+
+    def handle(self) -> None:
+        """read in the serial bytes and process lines into value lists for IMPSY"""
+        # first read in the serial bytes in waiting
+        while self.serial.in_waiting:
+            self.buffer += self.serial.read(self.serial.in_waiting).decode()
+        
+        # process lines into values.
+        while '\n' in self.buffer:
+            line, self.buffer = self.buffer.split('\n', 1)
+            if line:
+                try:
+                    value_list = [float(x) for x in line.split(',')]
+                    self.dense_callback(value_list) # callback with the value list.
+                except ValueError:
+                    click.secho(f"Serial: Could not parse line: {line}", fg="red")
+
+
+    def connect(self) -> None:
+        """Tries to open a serial port for regular IO."""
+        try:
+            click.secho("Serial: Opening port", fg="yellow")
+            # TODO make the serial port configurable duh.
+            self.serial = serial.Serial( self.serial_port, baudrate=self.baudrate, timeout=0)
+        except:
+            self.serial = None
+            click.secho("Serial: Could not open port.", fg="red")
+
+
+    def disconnect(self) -> None:
+        try:
+            self.serial.close()
+        except:
+            pass
+    
+
 class SerialMIDIServer(IOServer):
     """Handles MIDI over serial."""
 
@@ -178,12 +232,13 @@ class SerialMIDIServer(IOServer):
         """Tries to open a serial port for MIDI IO on Raspberry Pi."""
         try:
             click.secho(
-                "Trying to open Raspberry Pi serial port for MIDI in/out.", fg="yellow"
+                "Trying to open serial port for MIDI in/out.", fg="yellow"
             )
-            self.serial = serial.Serial("/dev/ttyAMA0", baudrate=31250)
+            # TODO make the serial port configurable duh.
+            self.serial = serial.Serial("/dev/ttyAMA0", baudrate=31250) 
         except:
             self.serial = None
-            click.secho("Could not open Raspberry Pi serial port.", fg="red")
+            click.secho("Could not open serial port.", fg="red")
 
     def disconnect(self) -> None:
         try:
@@ -199,6 +254,7 @@ class WebSocketServer(IOServer):
         super().__init__(config, callback, dense_callback)
         self.ws_clients = set()  # storage for potential ws clients.
         self.ws_thread = None
+        self.ws_server = None
 
     def send(self, output_values) -> None:
         return super().send(output_values)
@@ -216,10 +272,14 @@ class WebSocketServer(IOServer):
         self.ws_thread.start()  # send it!
 
     def disconnect(self) -> None:
+        if self.ws_server:
+            self.ws_server.shutdown() # stops the server_forever loop on the server if it exists.
         try:
-            self.ws_thread.join(timeout=0.1)
+            self.ws_thread.join(timeout=1.0) # the shutdown poll is usually 0.5 seconds.
         except:
             pass
+        if self.ws_server:
+            self.ws_server.socket.close() 
 
     def websocket_send_midi(self, message):
         """Sends a mido MIDI message via websockets if available."""
@@ -286,6 +346,7 @@ class WebSocketServer(IOServer):
         hostname = self.config["websocket"]["server_ip"]
         port = self.config["websocket"]["server_port"]
         with serve(self.websocket_handler, hostname, port) as server:
+            self.ws_server = server
             server.serve_forever()
 
 
@@ -294,13 +355,13 @@ class OSCServer(IOServer):
 
     # [osc]
     # server_ip = "localhost" # Address of IMPSY
-    # server_port = "5000" # Port IMPSY listens on
+    # server_port = 5000 # Port IMPSY listens on
     # client_ip = "localhost" # Address of the output device
-    # client_port = "5002" # Port of the output device
+    # client_port = 5002 # Port of the output device
 
     # Details for OSC output
     INPUT_MESSAGE_ADDRESS = "/interface"
-    OUTPUT_MESSAGE_ADDRESS = "/prediction"
+    OUTPUT_MESSAGE_ADDRESS = "/impsy"
     TEMPERATURE_MESSAGE_ADDRESS = "/temperature"
     TIMESCALE_MESSAGE_ADDRESS = "/timescale"
 
@@ -351,17 +412,21 @@ class OSCServer(IOServer):
         # TODO: do something with this information...
 
     def connect(self) -> None:
-        print("Preparing Server thread.")
+        click.secho("Preparing OSC server thread.", fg="yellow")
         self.server_thread = Thread(
-            target=self.server.serve_forever, name="server_thread", daemon=True
+            target=self.server.serve_forever, name="osc_server_thread", daemon=True
         )
         self.server_thread.start()
 
     def disconnect(self) -> None:
+        if self.server:
+            self.server.shutdown()
         try:
-            self.server_thread.join(timeout=0.1)
+            self.server_thread.join(timeout=1.0)
         except:
             pass
+        if self.server:
+            self.server.socket.close()
 
     def send(self, output_values) -> None:
         self.osc_client.send_message(OSCServer.OUTPUT_MESSAGE_ADDRESS, output_values)
@@ -386,19 +451,19 @@ class MIDIServer(IOServer):
         else:
             return contains_list[0]
 
-    def open_raspberry_serial():
-        """Tries to open a serial port for MIDI IO on Raspberry Pi."""
-        try:
-            click.secho(
-                "Trying to open Raspberry Pi serial port for MIDI in/out.", fg="yellow"
-            )
-            ser = serial.Serial("/dev/ttyAMA0", baudrate=31250)
-        except:
-            ser = None
-            click.secho(
-                "Could not open serial port, might be in development mode.", fg="red"
-            )
-        return ser
+    # def open_raspberry_serial():
+    #     """Tries to open a serial port for MIDI IO on Raspberry Pi."""
+    #     try:
+    #         click.secho(
+    #             "Trying to open Raspberry Pi serial port for MIDI in/out.", fg="yellow"
+    #         )
+    #         ser = serial.Serial("/dev/ttyAMA0", baudrate=31250)
+    #     except:
+    #         ser = None
+    #         click.secho(
+    #             "Could not open serial port, might be in development mode.", fg="red"
+    #         )
+    #     return ser
 
     def __init__(self, config, callback, dense_callback) -> None:
         super().__init__(config, callback, dense_callback)
@@ -407,11 +472,11 @@ class MIDIServer(IOServer):
         ]  # retrieve dimension from the config file.
         self.verbose = self.config["verbose"]
         self.last_midi_notes = {}  # dict to store last played notes via midi
-        self.websocket_send_midi = None  # TODO implement some kind generic MIDI callback for other output channels.
+        # self.websocket_send_midi = None  # TODO implement some kind generic MIDI callback for other output channels.
 
     def connect(self) -> None:
         # Try Raspberry Pi serial opening
-        self.serial = MIDIServer.open_raspberry_serial()
+        # self.serial = MIDIServer.open_raspberry_serial()
         # MIDI port opening
         click.secho("Opening MIDI port for input/output.", fg="yellow")
         potential_midi_inputs = []
@@ -449,26 +514,26 @@ class MIDIServer(IOServer):
             self.midi_out_port.close()
         except:
             pass
-        try:
-            self.serial.close()
-        except:
-            pass
+        # try:
+        #     self.serial.close()
+        # except:
+        #     pass
 
-    def serial_send_midi(self, message):
-        """Sends a mido MIDI message via the very basic serial output on Raspberry Pi GPIO."""
-        try:
-            self.serial.write(message.bin())
-        except:
-            pass
+    # def serial_send_midi(self, message):
+    #     """Sends a mido MIDI message via the very basic serial output on Raspberry Pi GPIO."""
+    #     try:
+    #         self.serial.write(message.bin())
+    #     except:
+    #         pass
 
     def send_midi_message(self, message):
         """Send a MIDI message across all required outputs"""
         # TODO: this is where we can have laggy performance, careful.
         if self.midi_out_port is not None:
             self.midi_out_port.send(message)
-        self.serial_send_midi(message)
-        if self.websocket_send_midi is not None:
-            self.websocket_send_midi(message)
+        # self.serial_send_midi(message)
+        # if self.websocket_send_midi is not None:
+        #     self.websocket_send_midi(message)
 
     def send_midi_note_on(self, channel, pitch, velocity):
         """Send a MIDI note on (and implicitly handle note_off)"""

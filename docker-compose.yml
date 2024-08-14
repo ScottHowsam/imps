@@ -1,29 +1,30 @@
 services:
   webserver:
-    image: charlepm/impsy:0.5.3
+    image: charlepm/impsy
     command: poetry run ./start_impsy.py webui
     ports:
       - "4000:4000"
     volumes:
-      - ./datasets:/code/datasets
-      - ./logs:/code/logs
-      - ./models:/code/models
-      - ./config.toml:/code/config.toml
+      - ./configs:/impsy/configs
+      - ./datasets:/impsy/datasets
+      - ./logs:/impsy/logs
+      - ./models:/impsy/models
+      - ./config.toml:/impsy/config.toml
     networks:
       - impsy_network
 
   application:
-    image: charlepm/impsy:0.5.3
+    image: charlepm/impsy
     command: poetry run ./start_impsy.py run
     ports:
-      - "5000:5000"
+      - "6000:6000/udp"
       - "5001:5001"
-      - "5002:5002"
     volumes:
-      - ./datasets:/code/datasets
-      - ./logs:/code/logs
-      - ./models:/code/models
-      - ./config.toml:/code/config.toml
+      - ./configs:/impsy/configs
+      - ./datasets:/impsy/datasets
+      - ./logs:/impsy/logs
+      - ./models:/impsy/models
+      - ./config.toml:/impsy/config.toml
     networks:
       - impsy_network
 

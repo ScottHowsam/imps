@@ -5,39 +5,33 @@ import time
 import datetime
 import numpy as np
 import queue
-import tomllib
 from threading import Thread
 import click
-from .utils import mdrnn_config
+from .utils import mdrnn_config, get_config_data
 import impsy.impsio as impsio
+from pathlib import Path
 from impsy.structure import PredictionTree
 import impsy.heuristics as heuristics
 
 np.set_printoptions(precision=2)
 
 
-def setup_logging(dimension, location="logs/"):
+def setup_logging(dimension: int, location="logs"):
     """Setup a log file and logging, requires a dimension parameter"""
-    log_file = (
-        datetime.datetime.now().isoformat().replace(":", "-")[:19]
-        + "-"
-        + str(dimension)
-        + "d"
-        + "-mdrnn.log"
-    )  # Log file name.
-    log_file = location + log_file
+    log_date = datetime.datetime.now().isoformat().replace(":", "-")[:19]
+    log_name = f"{log_date}-{dimension}d-mdrnn.log"
+    log_file = Path(location) / log_name
     log_format = "%(message)s"
     logging.basicConfig(filename=log_file, level=logging.INFO, format=log_format)
-    click.secho(f"Logging enabled: {log_file}", fg="green")
+    click.secho(f"Logging enabled: {log_name}", fg="green")
 
 
-def build_network(config):
+def build_network(config: dict):
     """Build the MDRNN, uses a high-level size parameter and dimension."""
     from . import mdrnn
 
     click.secho(f"MDRNN: Using {config['model']['size']} model.", fg="green")
     model_config = mdrnn_config(config["model"]["size"])
-    mdrnn.MODEL_DIR = "./models/"
     net = mdrnn.PredictiveMusicMDRNN(
         mode=mdrnn.NET_MODE_RUN,
         dimension=config["model"]["dimension"],
@@ -54,12 +48,10 @@ def build_network(config):
 class InteractionServer(object):
     """Interaction server class. Contains state and functions for the interaction loop."""
 
-    def __init__(self):
+    def __init__(self, config: dict):
         """Initialises the interaction server including loading the config from a config.toml file."""
         click.secho("Preparing IMPSY interaction server...", fg="yellow")
-        click.secho("Opening configuration.", fg="yellow")
-        with open("config.toml", "rb") as f:
-            self.config = tomllib.load(f)
+        self.config = config
 
         ## Load global variables from the config file.
         self.verbose = self.config["verbose"]
@@ -70,15 +62,28 @@ class InteractionServer(object):
 
         ## Set up IO.
         self.senders = []
-        self.midi_sender = impsio.MIDIServer(
-            self.config, self.construct_input_list, self.dense_callback
-        )
-        self.midi_sender.connect()
-        self.senders.append(self.midi_sender)
-        self.websocket_sender = impsio.WebSocketServer(
-            self.config, self.construct_input_list, self.dense_callback
-        )
-        self.senders.append(self.websocket_sender)
+        if "midi" in self.config:
+            # Set up MIDI 
+            self.midi_sender = impsio.MIDIServer(
+                self.config, self.construct_input_list, self.dense_callback
+            )
+            self.midi_sender.connect()
+            self.senders.append(self.midi_sender)
+        if "websocket" in self.config:
+            # Set up websocket
+            self.websocket_sender = impsio.WebSocketServer(
+                self.config, self.construct_input_list, self.dense_callback
+            )
+            self.websocket_sender.connect()
+            self.senders.append(self.websocket_sender)
+        if "osc" in self.config:
+            # Set up OSC
+            self.osc_sender = impsio.OSCServer(
+                self.config, self.construct_input_list, self.dense_callback
+            )
+            self.osc_sender.connect()
+            self.senders.append(self.osc_sender)
+        # if "serial" in self.config: ... TODO
 
         # Import MDRNn
         click.secho("Importing MDRNN.", fg="yellow")
@@ -141,8 +146,8 @@ class InteractionServer(object):
     def send_back_values(self, output_values):
         """sends back sound commands to the MIDI/OSC/WebSockets outputs"""
         output = np.minimum(np.maximum(output_values, 0), 1)
-        self.midi_sender.send(output)
-        self.websocket_sender.send(output)
+        for sender in self.senders:
+            sender.send(output)
 
     def dense_callback(self, values) -> None:
         """insert a dense input list into the interaction stream (e.g., when receiving OSC)."""
@@ -325,9 +330,8 @@ class InteractionServer(object):
 
     def serve_forever(self):
         """Run the interaction server opening required IO."""
-        click.secho("Building MDRNN.", fg="yellow")
-        net = build_network(self.config)
         click.secho("Preparing MDRNN.", fg="yellow")
+        net = build_network(self.config)
         if self.config["model"]["file"] != "":
             net.load_model(
                 model_file=self.config["model"]["file"]
@@ -340,7 +344,6 @@ class InteractionServer(object):
         rnn_thread = Thread(
             target=self.playback_rnn_loop, name="rnn_player_thread", daemon=True
         )
-        self.websocket_sender.connect()  # TODO verify websockets again.
 
         # Logging
         if self.config["log"]:
@@ -358,16 +361,18 @@ class InteractionServer(object):
                     self.monitor_user_action()
         except KeyboardInterrupt:
             click.secho("\nCtrl-C received... exiting.", fg="red")
-            rnn_thread.join(timeout=0.1)
+            rnn_thread.join(timeout=1.0)
             for sender in self.senders:
                 sender.disconnect()
         finally:
-            click.secho("\nDone, shutting down.", fg="red")
+            click.secho("\nIMPSY has shut down. Bye!", fg="red")
 
 
 @click.command(name="run")
-def run():
+@click.option('--config', '-c', default='config.toml', help='Path to a .toml configuration file.')
+def run(config: str):
     """Run IMPSY interaction system with MIDI, WebSockets, and OSC."""
-    click.secho("GenAI: Running startup and main loop.", fg="blue")
-    interaction_server = InteractionServer()
+    click.secho("IMPSY Starting up...", fg="blue")
+    config_data = get_config_data(config)
+    interaction_server = InteractionServer(config_data)
     interaction_server.serve_forever()

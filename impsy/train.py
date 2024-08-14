@@ -4,6 +4,8 @@ import random
 import numpy as np
 import click
 from .utils import mdrnn_config
+import os
+from pathlib import Path
 
 
 # Model training hyperparameters
@@ -65,6 +67,8 @@ def train_mdrnn(
     mdrnn_layers = model_config["layers"]
     mdrnn_mixes = model_config["mixes"]
 
+    save_location = Path(save_location)
+
     click.secho(f"Model size: {model_size}", fg="blue")
     click.secho(f"Units: {mdrnn_units}", fg="blue")
     click.secho(f"Layers: {mdrnn_layers}", fg="blue")
@@ -115,8 +119,9 @@ def train_mdrnn(
     )
 
     # Save final Model
-    model_file = save_location + "/" + mdrnn_manager.model_name()
-    mdrnn_manager.model.save_weights(f"{model_file}.h5")
+    model_name = mdrnn_manager.model_name()
+    model_weights_file = save_location / f"{model_name}.h5"
+    mdrnn_manager.model.save_weights(model_weights_file)
     trained_weights = mdrnn_manager.model.get_weights()
 
     # Setup inference model to save
@@ -128,10 +133,19 @@ def train_mdrnn(
         sequence_length=1,
         layers=mdrnn_layers,
     )
+    model_name = inference_mdrnn.model_name()
+    model_keras_file = save_location / f"{model_name}.keras"
     inference_mdrnn.model.set_weights(trained_weights)
-    inference_mdrnn.model.save(f"{model_file}.keras")
-    # Return the history in case.
-    return history
+    inference_mdrnn.model.save(model_keras_file)
+
+    # Return the output in case
+    output = {
+        "name": model_name,
+        "history": history,
+        "weights_file": model_weights_file,
+        "keras_file": model_keras_file,
+    }
+    return output
 
 
 @click.command(name="train")

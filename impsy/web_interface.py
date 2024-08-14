@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, redirect, url_for
+from flask import Flask, render_template, request, send_file, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 import click
 import psutil
@@ -6,15 +6,18 @@ import shutil
 import platform
 import os
 import tomllib
+from impsy.dataset import generate_dataset
+from pathlib import Path
 
 app = Flask(__name__)
+app.secret_key = "impsywebui"
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
-LOGS_DIR = os.path.join(PROJECT_ROOT, 'logs')
-MODEL_DIR = os.path.join(PROJECT_ROOT, 'models')
-DATASET_DIR = os.path.join(PROJECT_ROOT, 'datasets')
-CONFIGS_DIR = os.path.join(PROJECT_ROOT, 'configs')
+PROJECT_ROOT = Path(os.path.dirname(CURRENT_DIR))
+LOGS_DIR = PROJECT_ROOT / 'logs'
+MODEL_DIR = PROJECT_ROOT / 'models'
+DATASET_DIR = PROJECT_ROOT / 'datasets'
+CONFIGS_DIR = PROJECT_ROOT / 'configs'
 CONFIG_FILE = 'config.toml'
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 4000
@@ -97,11 +100,25 @@ def logs():
     log_files = [f for f in os.listdir(LOGS_DIR) if allowed_log_file(f)]
     return render_template('logs.html', log_files=log_files)
 
-@app.route('/datasets')
+@app.route('/datasets', methods=['GET', 'POST'])
 def datasets():
+    new_dataset = None
+    if request.method == 'POST':
+        dimension = request.form.get('dimension', type=int)
+        if dimension:
+            try:
+                new_dataset_path = generate_dataset(dimension, source=LOGS_DIR, destination=DATASET_DIR)
+                # return redirect(url_for('datasets'))
+                new_dataset = os.path.basename(new_dataset_path)
+                flash(f"Dataset with dimension {dimension} generated successfully!", "success")
+            except Exception as e:
+                flash(f"Error generating dataset: {str(e)}", "error")
+            print(f"New dataset {new_dataset}")
+            return redirect(url_for('datasets', new_dataset=new_dataset))
     dataset_files = [f for f in os.listdir(DATASET_DIR) if allowed_dataset_file(f)]
-    print(dataset_files)
-    return render_template('datasets.html', dataset_files=dataset_files)
+    # print(dataset_files)
+    new_dataset = request.args.get('new_dataset')
+    return render_template('datasets.html', dataset_files=dataset_files, new_dataset=new_dataset)
 
 @app.route('/models', methods=['GET', 'POST'])
 def models():

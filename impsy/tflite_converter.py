@@ -1,13 +1,14 @@
 """impsy.tflite_converter: Functions for converting a model to tflite format."""
 
 import click
-from .utils import mdrnn_config
-import tomllib
+from .utils import mdrnn_config, get_config_data
+from pathlib import Path
 
 
-def model_to_tflite(model, output_name: str):
+def model_to_tflite(model, model_path: Path):
     import tensorflow as tf
 
+    output_file = model_path.with_suffix(".tflite")
     click.secho("Setup converter.", fg="blue")
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.target_spec.supported_ops = [
@@ -20,9 +21,8 @@ def model_to_tflite(model, output_name: str):
     tflite_model = converter.convert()
 
     click.secho("Saving..", fg="blue")
-    tflite_model_name = f"{output_name}.tflite"
-    click.secho(f"Saving tflite model to: {tflite_model_name}", fg="blue")
-    with open(tflite_model_name, "wb") as f:
+    click.secho(f"Saving tflite model to: {output_file}", fg="blue")
+    with open(output_file, "wb") as f:
         f.write(tflite_model)
 
 
@@ -31,12 +31,13 @@ def model_file_to_tflite(filename):
     import tensorflow as tf
     import keras_mdn_layer as mdn_layer
 
-    assert filename[-6:] == ".keras", "This function only works on .keras files."
+    model_file = Path(filename)
+    assert model_file.suffix == ".keras", "This function only works on .keras files."
     loaded_model = tf.keras.saving.load_model(
         filename, custom_objects={"MDN": mdn_layer.MDN}
     )
-    file_stem = filename.removesuffix(".keras")
-    model_to_tflite(loaded_model, file_stem)
+    model_to_tflite(loaded_model, model_file)
+
 
 
 def config_to_tflite(config_path):
@@ -45,8 +46,7 @@ def config_to_tflite(config_path):
     import impsy.mdrnn as mdrnn
 
     click.secho("IMPSY: Converting model to tflite.", fg="blue")
-    with open(config_path, "rb") as f:
-        config = tomllib.load(f)
+    config = get_config_data(config_path)
 
     click.secho(f"MDRNN: Using {config['model']['size']} model.", fg="green")
 
@@ -59,10 +59,9 @@ def config_to_tflite(config_path):
         layers=model_config["layers"],
     )
     click.secho(f"MDRNN Loaded: {net.model_name()}", fg="green")
-    net.load_model(model_file=config["model"]["file"])
-    output_name = config["model"]["file"].removesuffix(".h5")
-    output_name = output_name.removesuffix(".keras")
-    model_to_tflite(net.model, output_name)
+    model_path = Path(config["model"]["file"])
+    net.load_model(model_file=model_path)
+    model_to_tflite(net.model, model_path)
 
 
 def weights_file_to_model_file(weights_file, model_size, dimension, location):
@@ -79,7 +78,9 @@ def weights_file_to_model_file(weights_file, model_size, dimension, location):
     )
     inference_model.load_model(model_file=weights_file)
     model_name = inference_model.model_name()
-    inference_model.model.save(f"{location}/{model_name}.keras")
+    keras_filename = Path(location) / f"{model_name}.keras"
+    inference_model.model.save(keras_filename)
+    return keras_filename
 
 
 @click.command(name="convert-tflite")

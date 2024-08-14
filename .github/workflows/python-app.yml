@@ -14,14 +14,17 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, macos-latest, windows-latest]
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform }}
 
     steps:
     - uses: actions/checkout@v4
     - name: Install poetry
       run: pipx install poetry
-    - uses: actions/setup-python@v3
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         cache: 'poetry'
@@ -43,9 +46,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Run the main file just to prove it works.
       run: |
-        poetry run ./start_impsy.py --help
+        poetry run python ./start_impsy.py --help
     - name: refresh coverage badge
       uses: fjogeleit/http-request-action@v1
       with:
-        url: https://camo.githubusercontent.com/46e89dfeb8bfbb9f0d13e8c5ed0d3779851bf0ecde89e303a3bf2a91bd956039/68747470733a2f2f636f766572616c6c732e696f2f7265706f732f6769746875622f63706d70657263757373696f6e2f696d70732f62616467652e7376673f6272616e63683d6d61696e
+        url: https://camo.githubusercontent.com/e420650ef02b7e268611c2787832580ccea8419872685d4be03c53a30310ad41/68747470733a2f2f636f766572616c6c732e696f2f7265706f732f6769746875622f63706d70657263757373696f6e2f696d7073792f62616467652e7376673f6272616e63683d6d61696e
         method: PURGE

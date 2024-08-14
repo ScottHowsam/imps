@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "impsy"
-version = "0.5.3"
+version = "0.5.4"
 description = "IMPSY is the Interactive Musical Prediction SYstem, a tool for creative interactive intelligent musical instruments using a recurrent mixture density neural network."
 authors = ["Charles Martin <cpm@charlesmartin.au>"]
 license = "MIT"
@@ -9,23 +9,20 @@ homepage = "https://github.com/cpmpercussion/impsy"
 repository = "https://github.com/cpmpercussion/impsy"
 
 [tool.poetry.dependencies]
-python = "~3.11"
-# FIXME: This weirdly causes an error, fix
-# tensorflow-macos = {markers="sys_platform == 'darwin' and platform_machine == 'arm64'", version = "2.15.0"}
+python = "==3.11.*"
+tensorflow-io-gcs-filesystem = [
+  {platform = "win32", version = "0.31.0"},
+  {platform = "darwin", version = "~0.36.0"},
+  {platform = "linux", version = "~0.36.0"},
+]
 tensorflow = [
   {markers="sys_platform == 'darwin' and platform_machine == 'x86_64'", version = "2.15.0"},
   {markers="sys_platform == 'linux' and platform_machine == 'x86_64'", version = "2.15.0"},
-  {markers="sys_platform == 'win32'", version = "2.13.1"},  # Highest TensorFlow version available for Windows
+  {platform = "win32", version = "2.15.0"},
   ]
-tensorflow-probability = [
-  {markers="sys_platform == 'darwin' and platform_machine == 'x86_64'", version = "0.23.0"},
-  {markers="sys_platform == 'linux' and platform_machine == 'x86_64'", version = "0.23.0"},
-  {markers="sys_platform == 'win32'", version = "0.21.0"},  # Highest TensorFlow version available for Windows
-  ]
-tensorflow-io-gcs-filesystem = [
-    {markers="sys_platform != 'win32'", version = ">= 0.23.1"},
-    {markers="sys_platform == 'win32'", version = "< 0.32.0"}
-]
+tensorflow-intel = {version="2.15.0", platform = "win32"}
+tensorflow-macos = {markers="sys_platform == 'darwin' and platform_machine == 'arm64'", version = "2.15.0"}
+tensorflow-probability = "0.23.0"
 h5py = "~3.10.0"
 python-osc = "^1.8.3"
 keras-mdn-layer = [
