@@ -6,7 +6,6 @@ def rhythmic_consistency(branch: np.ndarray) -> float:
 
 def four_note_repetition(branch: np.ndarray) -> float: #TODO make this work for more than 2D
     branches_mod_4 = [branch[np.arange(len(branch)) % 4 == i] for i in range(4)]
-    print(branches_mod_4)
     std_total = 0
     # Subtract the standard deviation of each mod arrays time and pitch, add the overall time and pitch standard deviation for the last 4 elements
     for b in branches_mod_4:

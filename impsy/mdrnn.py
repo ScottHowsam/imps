@@ -70,6 +70,7 @@ class PredictiveMusicMDRNN(object):
         n_mixtures=5,
         sequence_length=30,
         layers=2,
+        tflite=True,
     ):
         """Initialise the MDRNN model. Use mode='run' for evaluation graph and
         mode='train' for training graph.
@@ -89,6 +90,7 @@ class PredictiveMusicMDRNN(object):
         self.n_hidden_units = n_hidden_units
         self.n_rnn_layers = layers
         self.n_mixtures = n_mixtures  # number of mixtures
+        self.tflite = tflite
         # Sampling hyperparameters
         self.pi_temp = 1.5
         self.sigma_temp = 0.01
@@ -102,8 +104,16 @@ class PredictiveMusicMDRNN(object):
             self.inference = False
             self.time_dist = True
 
-        self.model = self.build()
-        self.model.summary()
+        self.models = self.build()
+        self.model = self.models[0]
+        self.tflite_model = self.models[1]
+        #self.interpreter = self.models[2]
+        from pathlib import Path
+        MODEL = Path("models") / "musicMDRNN-dim2-layers2-units64-mixtures5-scale10.tflite"
+        self.interpreter = tf.lite.Interpreter(model_path=str(MODEL))
+        if not tflite:
+            self.model.summary()
+
         self.run_name = self.get_run_name()
         self.reset_lstm_states()
 
@@ -166,7 +176,29 @@ class PredictiveMusicMDRNN(object):
             optimizer = tf.keras.optimizers.Adam()
             new_model.compile(loss=loss_func, optimizer=optimizer)
 
-        return new_model
+        if self.tflite:
+            # Convert the model to TFLite and return
+            # TODO: if model exists as file, load it, otherwise convert and save as file
+            converter = tf.lite.TFLiteConverter.from_keras_model(new_model)
+            converter.target_spec.supported_ops = [
+                tf.lite.OpsSet.TFLITE_BUILTINS,
+                tf.lite.OpsSet.SELECT_TF_OPS
+            ]
+            converter._experimental_lower_tensor_list_ops = False
+            tflite_model = converter.convert()
+
+            # Initialize the TFLite interpreter
+            interpreter = tf.lite.Interpreter(model_content=tflite_model)
+            interpreter.allocate_tensors()
+
+            # Print expected input dimensions for the TensorFlow model
+            print(f"TensorFlow model expected input shape: {new_model.input_shape}")
+            input_details = interpreter.get_input_details()
+            print(f"TensorFlow Lite model expected input shape: {input_details[0]['shape']}")
+
+            return (new_model, tflite_model, interpreter)
+
+        return (new_model, None, None)
 
     def reset_lstm_states(self):
         states = []
@@ -275,21 +307,93 @@ class PredictiveMusicMDRNN(object):
         )
         return history
 
-    def generate_touch(self, prev_sample):
+    def generate_touch(self, prev_sample, lstm_states=None):
         """Generate one forward prediction from a previous sample in format
         (dt, x_1,...,x_n). Pi and Sigma temperature are adjustable."""
         assert (
             len(prev_sample) == self.dimension
         ), "Only works with samples of the same dimension as the network"
-        # print("Input sample", prev_sample)
-        input_list = [
-            prev_sample.reshape(1, 1, self.dimension) * SCALE_FACTOR
-        ] + self.lstm_states
-        model_output = self.model(input_list)
-        mdn_params = model_output[0][0].numpy()
-        self.lstm_states = model_output[1:]  # update storage of LSTM state
+        
+        using_self = False
+        if lstm_states is None:
+            lstm_states = self.lstm_states
+            using_self = True
+        #print(using_self, "LSTM states:", lstm_states)
+        # Flatten the input data to match the new model's input shape
+        input_data = prev_sample.reshape(1, 1, self.dimension) * SCALE_FACTOR
+        
+        if self.tflite:
+            # TFLite approach
+            # TODO use signature list to connect to the correct signature
+            #signatures = self.interpreter.get_signature_list() 
+            #print("Signatures:\n", signatures)
+            runner = self.interpreter.get_signature_runner()
+            #input_details = self.interpreter.get_input_details()
+            #output_details = self.interpreter.get_output_details()
 
-        # sample from the MDN:
+            ##import json
+            ## json pretty print indent 4 input_details
+            #print("INPUT")
+            #print(input_details)
+            #print("OUTPUT")
+            #print(output_details)
+            #print("SIGNATURE")
+            #signature_list = self.interpreter.get_signature_list()
+            #print(signature_list)
+#
+            #input_done = False
+            #for i in range(len(input_details)):
+            #    if input_details[i]['shape'].shape == (3,):
+            #        self.interpreter.set_tensor(input_details[i]['index'], input_data.astype(np.float32))
+            #        input_done = True
+            #    else:
+            #        # Else it should be a (1, 64) LSTM state
+            #        lstm_state_index = i - 1 if input_done else i
+            #        # Pad the LSTM state to match the expected shape if less than length 64
+            #        if lstm_states[lstm_state_index].shape[1] < input_details[i]['shape'][1]:
+            #            lstm_states[lstm_state_index] = np.pad(lstm_states[lstm_state_index], ((0, 0), (0, input_details[i]['shape'][1] - lstm_states[lstm_state_index].shape[1])), 'constant')
+            #        self.interpreter.set_tensor(input_details[i]['index'], lstm_states[lstm_state_index])
+    #
+            ## Run inference
+            #self.interpreter.invoke()
+#
+            ## Access the 'mdn_outputs' signature runner
+            #signature_runner = self.interpreter.get_signature_runner('mdn_outputs')
+            #
+            ## Run the inference (ensure invoke() was called earlier)
+            #output = signature_runner()
+            #
+            ## Print the output associated with the 'mdn_outputs' signature
+            #print("Output", output)
+            #print("Output shape", output.shape)
+#
+    #
+            ## Get output tensor
+            #mdn_params = self.interpreter.get_tensor(output_details[0]['index'])[0]
+    #
+            ## Update LSTM states
+            #lstm_states = [self.interpreter.get_tensor(output_details[i]['index']) for i in range(1, len(output_details))]
+
+            input_value = prev_sample.reshape(1,1,self.dimension) * SCALE_FACTOR
+            input_value = input_value.astype(np.float32, copy=False)
+            raw_out = runner(
+                inputs = input_value,
+                state_h_0 = lstm_states[0],
+                state_c_0 = lstm_states[1],
+                state_h_1 = lstm_states[2],
+                state_c_1 = lstm_states[3],
+            )
+            lstm_states = [raw_out['lstm_0'], raw_out['lstm_0_1'], raw_out['lstm_1'], raw_out['lstm_1_1']]
+            # sample from the MDN:
+            mdn_params = raw_out['mdn_outputs'].squeeze()
+        else:
+            # Original TensorFlow approach
+            input_list = [input_data] + lstm_states
+            model_output = self.model(input_list)
+            mdn_params = model_output[0][0].numpy()
+            lstm_states = model_output[1:]  # update storage of LSTM state
+    
+        # Sample from the MDN (this part remains the same for both approaches)
         new_sample = (
             mdn.sample_from_output(
                 mdn_params,
@@ -303,4 +407,7 @@ class PredictiveMusicMDRNN(object):
         new_sample = new_sample.reshape(
             self.dimension,
         )
-        return new_sample
+        if using_self:
+            self.lstm_states = lstm_states
+            return new_sample
+        return [new_sample, lstm_states]

@@ -139,7 +139,7 @@ class InteractionServer(object):
         # Set up structural variables
         self.rnn_output_memory_size = 15
         self.rnn_output_memory = []
-        self.rnn_prediction_tree = PredictionTree(max_depth=2, branching_factor=4) #TODO Variable depth and branching factor.
+        self.rnn_prediction_tree = None
 
 
 
@@ -226,37 +226,44 @@ class InteractionServer(object):
             and self.rnn_output_buffer.empty()
             and not self.rnn_prediction_queue.empty()
         ):
-            print("RNN to RNN")
+            #print("RNN to RNN")
             item = self.rnn_prediction_queue.get(block=True, timeout=None)
-            print("Item:", item)
+            #print("Item:", item)
             # If memory is length zero, set memory to the current item.
             if not self.rnn_output_memory:
                 self.rnn_output_memory = [item]
-            # start timer
+            # # start timer
+            # start_time = time.time()
+            # self.rnn_prediction_tree.build_tree(self.rnn_output_memory, neural_net.generate_touch)
+            # # End timer
+            # end_time = time.time()
+            # print(f"Time taken: {end_time - start_time}")
+# 
+            # # Print the sampled branches
+            # self.rnn_prediction_tree.rank_branches(heuristics.four_note_repetition)
+            # #for i, (branch, heuristic_value) in enumerate(sampled_branches):
+            # #    print(f"Branch {i + 1} Heuristic Value: {heuristic_value:.4f}):")
+            # #    print(branch)
+            # #    print(f"Branch length: {len(branch)}")
+            # #    print()
+            # # Get the branch with the highest heuristic value
+            # best_branch = self.rnn_prediction_tree.best_branch
+            # #print("Best Branch:", best_branch)
+            # # Get the item from memory length + 1 from the best branch
+            # rnn_output = best_branch[0][len(self.rnn_output_memory)]
+            # #lstm_states = best_branch[0][len(self.rnn_output_memory)][1]
+            
             start_time = time.time()
-            self.rnn_prediction_tree.build_tree(self.rnn_output_memory, neural_net.generate_touch)
-            # Print the sampled branches
-            sampled_branches = self.rnn_prediction_tree.rank_branches(heuristics.four_note_repetition)
-            for i, (branch, heuristic_value) in enumerate(sampled_branches):
-                print(f"Branch {i + 1} Heuristic Value: {heuristic_value:.4f}):")
-                print(branch)
-                print(f"Branch length: {len(branch)}")
-                print()
-            # Get the branch with the highest heuristic value
-            best_branch = self.rnn_prediction_tree.best_branch
-            print("Best Branch:", best_branch)
-            # Get the item from memory length + 1 from the best branch
-            rnn_output = best_branch[0][len(self.rnn_output_memory)]
-            # End timer
+            for i in range(1000): #TODO: Tested as 0.15ms on average, remove
+                rnn_output = neural_net.generate_touch(item)
             end_time = time.time()
+            print("RNN Output:", rnn_output)
             print(f"Time taken: {end_time - start_time}")
 
-            #rnn_output = neural_net.generate_touch(item)
-            print("RNN Output:", rnn_output)
             self.rnn_output_memory.append(rnn_output)
             if len(self.rnn_output_memory) > self.rnn_output_memory_size:
                 self.rnn_output_memory.pop(0)
-            print("Memory:", self.rnn_output_memory)
+            #print("Memory:", self.rnn_output_memory)
             self.rnn_output_buffer.put_nowait(
                 rnn_output
             )  # put it in the playback queue.
@@ -338,6 +345,9 @@ class InteractionServer(object):
             )  # load custom model.
         else:
             net.load_model()  # try loading from default file location.
+
+        # Set up the prediction tree
+        self.rnn_prediction_tree = PredictionTree(max_depth=2, branching_factor=3, initial_lstm_states=net.lstm_states) #TODO Variable depth and branching factor.
 
         # Threads
         click.secho("Preparing MDRNN thread.", fg="yellow")
