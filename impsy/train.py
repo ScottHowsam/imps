@@ -4,7 +4,6 @@ import random
 import numpy as np
 import click
 from .utils import mdrnn_config
-import os
 from pathlib import Path
 
 
@@ -57,10 +56,15 @@ def train_mdrnn(
     num_epochs: int,
     batch_size: int,
     save_location: str = "models",
+    save_model: bool = True,
+    save_weights: bool = False,
+    save_tflite: bool = True, 
 ):
     """Loads a dataset, creates a model and runs the training procedure."""
     import impsy.mdrnn as mdrnn
     from tensorflow import keras
+    from .tflite_converter import model_to_tflite
+
 
     model_config = mdrnn_config(model_size)
     mdrnn_units = model_config["units"]
@@ -78,9 +82,14 @@ def train_mdrnn(
     np.random.seed(SEED)
 
     # Load dataset
-    dataset_location = f"{dataset_location}/"
-    dataset_filename = f"training-dataset-{str(dimension)}d.npz"
-    with np.load(dataset_location + dataset_filename, allow_pickle=True) as loaded:
+    dataset_location = Path(dataset_location)
+    dataset_default_name = f"training-dataset-{str(dimension)}d.npz"
+    if dataset_location.suffix == "":
+        dataset_default_name = f"training-dataset-{str(dimension)}d.npz"
+        dataset_location = dataset_location / dataset_default_name
+    assert dataset_location.suffix == ".npz", "dataset file to load must end with .npz"
+    click.secho(f"Dataset: {dataset_location}")
+    with np.load(dataset_location, allow_pickle=True) as loaded:
         corpus = loaded["perfs"]
     print("Loaded performances:", len(corpus))
     print("Num touches:", np.sum([len(l) for l in corpus]))
@@ -119,32 +128,43 @@ def train_mdrnn(
     )
 
     # Save final Model
-    model_name = mdrnn_manager.model_name()
-    model_weights_file = save_location / f"{model_name}.h5"
-    mdrnn_manager.model.save_weights(model_weights_file)
-    trained_weights = mdrnn_manager.model.get_weights()
+    model_name = mdrnn_manager.model_name
 
-    # Setup inference model to save
-    inference_mdrnn = mdrnn.PredictiveMusicMDRNN(
-        mode=mdrnn.NET_MODE_RUN,
-        dimension=dimension,
-        n_hidden_units=mdrnn_units,
-        n_mixtures=mdrnn_mixes,
-        sequence_length=1,
-        layers=mdrnn_layers,
-    )
-    model_name = inference_mdrnn.model_name()
-    model_keras_file = save_location / f"{model_name}.keras"
-    inference_mdrnn.model.set_weights(trained_weights)
-    inference_mdrnn.model.save(model_keras_file)
-
-    # Return the output in case
+    # start preparing output dict output in case
     output = {
         "name": model_name,
         "history": history,
-        "weights_file": model_weights_file,
-        "keras_file": model_keras_file,
     }
+
+    # Don't save h5 weights anymore, only using .keras and .tflite files.
+    if save_weights:
+        # Save .h5 file
+        model_weights_file = save_location / f"{model_name}.h5"
+        mdrnn_manager.model.save_weights(model_weights_file)
+        output["weights_file"] = model_weights_file
+    
+    if save_model:
+        # Save .keras file
+        trained_weights = mdrnn_manager.model.get_weights()
+        inference_mdrnn = mdrnn.PredictiveMusicMDRNN(
+            mode=mdrnn.NET_MODE_RUN,
+            dimension=dimension,
+            n_hidden_units=mdrnn_units,
+            n_mixtures=mdrnn_mixes,
+            sequence_length=1,
+            layers=mdrnn_layers,
+        )
+        model_name = inference_mdrnn.model_name
+        model_keras_file = save_location / f"{model_name}.keras"
+        inference_mdrnn.model.set_weights(trained_weights)
+        inference_mdrnn.model.save(model_keras_file)
+        output["keras_file"] = model_keras_file
+
+    if save_tflite:
+        # Save .tflite file
+        tflite_file = model_to_tflite(inference_mdrnn.model, model_keras_file)
+        output["tflite_file"] = tflite_file
+
     return output
 
 
@@ -161,7 +181,7 @@ def train_mdrnn(
     "--source",
     type=str,
     default="datasets",
-    help="The source directory to obtain .npz dataset files.",
+    help="A .npz dataset file to use for training, or source directory to obtain .npz dataset files.",
 )
 @click.option(
     "-M",

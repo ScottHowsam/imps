@@ -6,7 +6,7 @@ owner = "Charles Martin"
 description = "Uses x-touch over it's own USB connector and Volca FM over the Studio 1824c"
 
 # Basic config
-log = true
+log_input = true
 log_predictions = false
 verbose = true
 
@@ -19,7 +19,7 @@ input_thru = true # sends inputs directly to outputs (e.g., if input interface i
 # Model configuration
 [model]
 dimension = 9
-file = "models/musicMDRNN-dim9-layers2-units64-mixtures5-scale10.h5"
+file = "models/musicMDRNN-dim9-layers2-units64-mixtures5-scale10.h5" # default model, .tflite, .keras, .h5 options provided.
 size = "s" # Can be one of: xs, s, m, l, xl
 sigmatemp = 0.01
 pitemp = 1
@@ -53,9 +53,56 @@ output = [ # Volca FM
 [websocket]
 server_ip = "0.0.0.0" # The address of this server
 server_port = 5001 # The port this server should listen on.
+input = [ # Volca FM
+  ["note_on", 1], # note
+  ["control_change", 1, 42], # Modulator Attack
+  ["control_change", 1, 43], # Modulator Decay
+  ["control_change", 1, 44], # Carrier Attack
+  ["control_change", 1, 45], # Carrier Decay
+  ["control_change", 1, 46], # LFO rate
+  ["control_change", 1, 47], # LFO depth
+  ["control_change", 1, 48], # Algorithm
+]
+output = [ # Volca FM
+  ["note_on", 1], # note
+  ["control_change", 1, 42], # Modulator Attack
+  ["control_change", 1, 43], # Modulator Decay
+  ["control_change", 1, 44], # Carrier Attack
+  ["control_change", 1, 45], # Carrier Decay
+  ["control_change", 1, 46], # LFO rate
+  ["control_change", 1, 47], # LFO depth
+  ["control_change", 1, 48], # Algorithm
+]
 
 [osc]
 server_ip = "0.0.0.0" # Address of IMPSY
 server_port = 6000 # Port IMPSY listens on
 client_ip = "localhost" # Address of the output device
 client_port = 6001 # Port of the output device
+
+[serial]
+port = "/dev/ttyAMA0" # default GPIO serial port on raspberry pi
+baudrate = 115200 # a typical default choice of baudrate
+
+[serialmidi]
+port = "/dev/ttyAMA0" # default GPIO serial port on raspberry pi
+input = [ # Volca FM
+  ["note_on", 1], # note
+  ["control_change", 1, 42], # Modulator Attack
+  ["control_change", 1, 43], # Modulator Decay
+  ["control_change", 1, 44], # Carrier Attack
+  ["control_change", 1, 45], # Carrier Decay
+  ["control_change", 1, 46], # LFO rate
+  ["control_change", 1, 47], # LFO depth
+  ["control_change", 1, 48], # Algorithm
+]
+output = [ # Volca FM
+  ["note_on", 1], # note
+  ["control_change", 1, 42], # Modulator Attack
+  ["control_change", 1, 43], # Modulator Decay
+  ["control_change", 1, 44], # Carrier Attack
+  ["control_change", 1, 45], # Carrier Decay
+  ["control_change", 1, 46], # LFO rate
+  ["control_change", 1, 47], # LFO depth
+  ["control_change", 1, 48], # Algorithm
+]

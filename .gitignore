@@ -164,7 +164,6 @@ output-logs
 models
 logs
 datasets
-./tests
 
 *.hdf5
 *.no
@@ -172,3 +171,5 @@ datasets
 *.csv
 
 python_311_env
+
+experiment_data

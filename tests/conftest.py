@@ -1,11 +1,12 @@
 from impsy import dataset
 from impsy import train
-from impsy import tflite_converter
-import numpy as np
+from impsy import utils
 import os
 import random
-import tensorflow as tf
 import pytest
+
+
+## MDRNN configuration
 
 
 @pytest.fixture(scope="session")
@@ -15,6 +16,35 @@ def dimension():
 @pytest.fixture(scope="session")
 def mdrnn_size():
     return "xs"
+
+@pytest.fixture(scope="session")
+def units(mdrnn_size):
+    return utils.mdrnn_config(mdrnn_size)['units']
+
+@pytest.fixture(scope="session")
+def mixtures(mdrnn_size):
+    return utils.mdrnn_config(mdrnn_size)['mixes']
+
+@pytest.fixture(scope="session")
+def layers(mdrnn_size):
+    return utils.mdrnn_config(mdrnn_size)['layers']
+
+
+## Training configuration
+
+
+@pytest.fixture(scope="session")
+def sequence_length():
+    return 3
+
+
+@pytest.fixture(scope="session")
+def batch_size():
+    return 3
+
+
+## Locations
+
 
 @pytest.fixture(scope="session")
 def dataset_location(tmp_path_factory):
@@ -30,6 +60,9 @@ def log_location(tmp_path_factory):
 def models_location(tmp_path_factory):
     location = tmp_path_factory.mktemp("models")
     return location
+
+
+## Generate sample log files, dataset files, and models.
 
 
 @pytest.fixture(scope="session")
@@ -49,10 +82,6 @@ def log_files(log_location, dimension, number=20, events=49):
                 file.write(test_line)
         test_log_files.append(test_log_file)
     return test_log_files
-    # yield test_log_files
-    # after test, delete the files.
-    # for f in test_log_files:
-    #     os.remove(f)
 
 
 @pytest.fixture(scope="session")
@@ -61,24 +90,16 @@ def dataset_file(log_location, dataset_location, dimension, log_files):
         dimension=dimension, source=log_location, destination=dataset_location
     )
     dataset_full_path = dataset_location / dataset_filename
-    # yield dataset_full_path
-    # os.remove(dataset_full_path)
     return dataset_full_path
 
 
-def test_log_to_examples(dimension, log_files):
-    """Tests transform_log_to_sequence_example with a single example"""
-    log = dataset.transform_log_to_sequence_example(log_files[0], dimension)
-    assert isinstance(log, np.ndarray)
-    assert len(log[0]) == dimension
-
-
-def test_dataset_command(dataset_location, dataset_file):
-    """Test the dataset command runs"""
-    with np.load(dataset_file, allow_pickle=True) as loaded:
-        corpus = loaded["perfs"]
-    print("Loaded performances:", len(corpus))
-    print("Num touches:", np.sum([len(l) for l in corpus]))
+@pytest.fixture(scope="session")
+def sequence_slices(sequence_length, dimension, batch_size):
+    x_t_log = utils.generate_data(
+        samples=((sequence_length + 1) * batch_size), dimension=dimension
+    )
+    slices = train.slice_sequence_examples(x_t_log, sequence_length + 1, step_size=1)
+    return slices
 
 
 @pytest.fixture(scope="session")
@@ -97,45 +118,24 @@ def trained_model(dimension, dataset_file, dataset_location, models_location, md
         num_epochs=epochs,
         batch_size=batch_size,
         save_location=models_location,
+        save_model=True,
+        save_weights=True,
+        save_tflite=True,
     )
-    # yield train_output
-    # os.remove(train_output["weights_file"])
-    # os.remove(train_output["keras_file"])
     return train_output
 
 
-def test_train_command(trained_model):
-    """Test that a trained model can be constructed."""
-    assert os.path.isfile(trained_model["weights_file"])
-    assert os.path.isfile(trained_model["keras_file"])
-    assert isinstance(trained_model["history"], tf.keras.callbacks.History)
+@pytest.fixture(scope="session")
+def tflite_file(trained_model):
+    return trained_model['tflite_file']
 
 
-### tflite tests
-
-def test_config_to_tflite():
-    test_config = "configs/default.toml"
-    expected_output_path = (
-        "models/musicMDRNN-dim9-layers2-units64-mixtures5-scale10.tflite"
-    )
-    tflite_converter.config_to_tflite(test_config)
-    assert os.path.exists(expected_output_path)
-    os.remove(expected_output_path)
+@pytest.fixture(scope="session")
+def weights_file(trained_model):
+    return trained_model['weights_file']
 
 
-def test_weights_to_model_file(trained_model, dimension, tmp_path_factory, mdrnn_size):
-    weights_file = trained_model["weights_file"]
-    print(f"Weights file: {weights_file}")
-    test_dir = tmp_path_factory.mktemp("model_file")
-    model_file_name = tflite_converter.weights_file_to_model_file(weights_file, mdrnn_size, dimension, test_dir)
-    print(f"File returned: {model_file_name}")
-    assert os.path.exists(model_file_name)
-    os.remove(model_file_name)
+@pytest.fixture(scope="session")
+def keras_file(trained_model):
+    return trained_model['keras_file']
 
-
-def test_model_file_to_tflite(trained_model):
-    model_filename = trained_model["keras_file"]
-    expected_output_path = model_filename.with_suffix('.tflite')
-    tflite_converter.model_file_to_tflite(model_filename)
-    assert os.path.exists(expected_output_path)
-    os.remove(expected_output_path)

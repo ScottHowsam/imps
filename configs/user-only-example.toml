@@ -1,9 +1,9 @@
 # The configuration file for IMPSY: Interactive Musical Prediction System
 
 # Metadata about this configuration
-title = "Microbit Serial Demo"
+title = "Testing a user-only configuration"
 owner = "Charles Martin"
-description = "Communicates with a microbit interface over serial."
+description = ""
 
 # Basic config
 log_input = true
@@ -12,21 +12,21 @@ verbose = true
 
 # Interaction Configuration
 [interaction]
-mode = "callresponse" # Can be: "callresponse", "polyphony", "battle", "useronly"
+mode = "useronly" # Can be: "callresponse", "polyphony", "battle", "useronly"
 threshold = 0.1 # number of seconds before switching in call-response mode
 input_thru = false # sends inputs directly to outputs (e.g., if input interface is different than output synth)
 
 # Model configuration
 [model]
-dimension = 4
-file = "models/musicMDRNN-dim4-layers2-units64-mixtures5-scale10.tflite"
+dimension = 17
+# file = "" # No model file! Uses untrained model.
 size = "s" # Can be one of: xs, s, m, l, xl
 sigmatemp = 0.01
 pitemp = 1
 timescale = 1
 
-# Serial mapping
-[serial]
-port = "/dev/tty.usbmodem1102" # likely serial port on macOS
-# port = "/dev/ttyACM0" # likely serial port on Raspberry Pi (also the default GPIO serial port name if enabled).
-baudrate = 115200 # a typical default choice of baudrate
+[osc]
+server_ip = "0.0.0.0" # Address of IMPSY
+server_port = 6000 # Port IMPSY listens on
+client_ip = "0.0.0.0" # Address of the output device
+client_port = 6001 # Port of the output device
